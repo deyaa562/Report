@@ -1,7 +1,7 @@
 from time import time
 import requests
 import inspect
-from ._config import UUID, PROJECT
+from ._config import UUID, PROJECT, LAUNCH_NAME
 
 def timestamp():
     return str(int(time() * 1000))
@@ -42,9 +42,9 @@ def get_caller_name():
     caller_frame = frame.f_back.f_back
     return caller_frame.f_code.co_name
 
-def start_launch(name: str = 'New Launch'):
+def start_launch():
     data = {
-        'name': name,
+        'name': LAUNCH_NAME,
         'description': 'My first launch on RP',
         f'startTime': timestamp()}
     
