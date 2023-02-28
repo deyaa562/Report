@@ -58,8 +58,6 @@ def start_launch():
         print('Second attemp to start a launch')
 
 def finish_launch():
-    import time
-    time.sleep(20)
     requests.put(url=f'{BASE_URL}/launch/{base_item_data["launchUuid"]}/finish', headers=headers, json={'endTime': timestamp()})
 
 # def log(parent: str, message: str):
