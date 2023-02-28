@@ -15,3 +15,4 @@ while not os.path.exists(os.path.join(current_dir, 'report.ini')):
     config.read('report.ini')
 
 UUID = config.get('Launch', 'UUID')
+PROJECT = config.get('Launch', 'Project')

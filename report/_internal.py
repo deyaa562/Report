@@ -1,13 +1,13 @@
 from time import time
 import requests
 import inspect
-from ._config import UUID
+from ._config import UUID, PROJECT
 
 def timestamp():
     return str(int(time() * 1000))
 
 
-BASE_URL = 'http://localhost:8080/api/v1/rp_project'
+BASE_URL = f'http://localhost:8080/api/v1/{PROJECT}'
 
 headers = {
     'Authorization': f'Bearer {UUID}'
@@ -50,6 +50,7 @@ def start_launch(name: str = 'New Launch'):
     
     if base_item_data['launchUuid'] == '':
         respone = requests.post(url=f'{BASE_URL}/launch', headers=headers, json=data)
+        print(respone.json())
         launch_uuid = respone.json()['id']
         base_item_data['launchUuid'] = launch_uuid
     
