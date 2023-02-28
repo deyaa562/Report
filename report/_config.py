@@ -1,18 +1,15 @@
-import configparser
 import os
 
-config = configparser.ConfigParser()
+UUID = os.getenv('UUID', None)
+if UUID is None:
+    raise EnvironmentError(
+        'UUID variable is missing make sure to add it to the .env file \n'
+        'Example: UUID = "8cc58ff3-890e-4047-835c-05981dbbad2b"')
 
-# Get the absolute path of the current file
-current_file_path = os.path.abspath(__file__)
+PROJECT = os.getenv('PROJECT', None)
+if PROJECT is None:
+    raise EnvironmentError(
+        'PROJECT variable is missing make sure to add it to the .env file \n'
+        'Example: PROJECT="rp_project"')
 
-# Get the directory containing the current file
-current_dir = os.path.dirname(current_file_path)
-
-# Traverse up the directory hierarchy until we find a directory containing a file named 'requirements.txt'
-while not os.path.exists(os.path.join(current_dir, 'report.ini')):
-    current_dir = os.path.dirname(current_dir)
-    config.read('report.ini')
-
-UUID = config.get('Launch', 'UUID')
-PROJECT = config.get('Launch', 'Project')
+LAUNCH_NAME = os.getenv('LAUNCH_NAME')
