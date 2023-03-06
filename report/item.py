@@ -1,16 +1,32 @@
 from ._internal import Launch
 import inspect
+import functools
+import asyncio
 
-async def _run_func(func, *args, **kwargs):
+
+def _run_func(func, *args, **kwargs):
+    __tracebackhide__ = True
     if inspect.iscoroutinefunction(func):
-        return await func(*args, **kwargs)
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError as e:
+            if "no running event loop" in str(e):
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+            else:
+                raise e
+
+            return loop.run_until_complete(func(*args, **kwargs))
 
     return func(*args, **kwargs)
 
-def step(name: str):
+def step(title: str):
     def decorator(func):
-        async def wrapper(*args, **kwargs):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            __tracebackhide__ = True
             parent = Launch.get_caller_name()
+            name = title.format(*args, **kwargs)
             item_id = Launch.create_report_item(
                 name=name,
                 parent_item=parent,
@@ -21,7 +37,7 @@ def step(name: str):
             Launch.items[func.__name__] = item_id
             result = None
             try:
-                result = await _run_func(func, *args, **kwargs)
+                result = _run_func(func, *args, **kwargs)
 
             except Exception as exception:
                 Launch.finish_failed_item(func.__name__, str(exception))
@@ -33,9 +49,12 @@ def step(name: str):
         return wrapper
     return decorator
 
-def title(name: str):
+def title(title: str):
     def decorator(func):
-        async def wrapper(*args, **kwargs):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            __tracebackhide__ = True
+            name = title.format(*args, **kwargs)
             item_id = Launch.create_report_item(
                 name=name,
                 parent_item=Launch.get_enclosing_class_name(func),
@@ -43,7 +62,7 @@ def title(name: str):
                 description=func.__doc__)
 
             Launch.items[func.__name__] = item_id
-            result = await _run_func(func, *args, **kwargs)
+            result = _run_func(func, *args, **kwargs)
             Launch.finish_item(func.__name__)
             return result
 
@@ -52,6 +71,7 @@ def title(name: str):
 
 def feature(name: str):
     def decorator(cls):
+        __tracebackhide__ = True
         item_id = Launch.create_report_item(
             name=name,
             type='suite',
@@ -64,7 +84,7 @@ def feature(name: str):
 
 def story(name: str):
     def decorator(cls):
-
+        __tracebackhide__ = True
         parent = cls.__mro__[1].__name__
         item_id = Launch.create_report_item(
             name=name,
@@ -76,5 +96,4 @@ def story(name: str):
         return cls
 
     return decorator
-
 
