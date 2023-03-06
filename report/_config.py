@@ -1,15 +1,23 @@
-import os
+import argparse
+from . import _internal
 
-UUID = os.getenv('UUID', None)
-if UUID is None:
-    raise EnvironmentError(
-        'UUID variable is missing make sure to add it to the .env file \n'
-        'Example: UUID = "8cc58ff3-890e-4047-835c-05981dbbad2b"')
+def config():
+    parser = argparse.ArgumentParser(description='Pytest Report Portal Wrapper')
+    parser.add_argument('--host', '-H', default='localhost', help='host:ip or domain name (Example: localhost:8080)')
+    parser.add_argument('--launch-name', '-l', default='new launch' ,help='New launch name ( default is "new launch" )')
+    parser.add_argument('--bearer-uuid', '-u', required=True, help='Auth bearer UUID')
+    parser.add_argument('--project-name', '-p', required=True, help='Report Portal project name')
+    args = parser.parse_args()
+    print(args.bearer_uuid)
+    _internal.Data.endpoint = args.host
+    _internal.Data.launch_name = args.launch_name 
+    _internal.Data.uuid = args.bearer_uuid
+    _internal.Data.project = args.project_name
+    _internal.Data.update_url()
+    _internal.Launch.update_headers()
 
-PROJECT = os.getenv('PROJECT', None)
-if PROJECT is None:
-    raise EnvironmentError(
-        'PROJECT variable is missing make sure to add it to the .env file \n'
-        'Example: PROJECT="rp_project"')
-
-LAUNCH_NAME = os.getenv('LAUNCH_NAME')
+    
+if __name__ == '__main__':
+    data = config()
+    _internal.Launch.start_launch()
+    
