@@ -1,0 +1,6 @@
+[console_scripts]
+report-dh = report._config:config
+
+[pytest11]
+report = report.plugin
+
