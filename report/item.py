@@ -2,6 +2,7 @@ from ._internal import Launch
 import inspect
 import functools
 import asyncio
+from typing import Union, Literal
 
 
 def _run_func(func, *args, **kwargs):
@@ -19,6 +20,18 @@ def _run_func(func, *args, **kwargs):
             return loop.run_until_complete(func(*args, **kwargs))
 
     return func(*args, **kwargs)
+
+
+def _get_class_parent(child_class):
+    for base_class in child_class.__bases__:
+        base_class_name = base_class.__name__
+        if base_class_name in Launch.items.keys():
+            return base_class_name
+        elif len(base_class.__bases__) > 0 :
+            _get_class_parent(base_class)
+
+    return ''
+
 
 def step(title: str):
     def decorator(func):
@@ -49,6 +62,7 @@ def step(title: str):
         return wrapper
     return decorator
 
+
 def title(title: str):
     def decorator(func):
         @functools.wraps(func)
@@ -69,6 +83,7 @@ def title(title: str):
         return wrapper
     return decorator
 
+
 def feature(name: str):
     def decorator(cls):
         __tracebackhide__ = True
@@ -78,14 +93,16 @@ def feature(name: str):
             description=cls.__doc__)
 
         Launch.items[cls.__name__] = item_id
+        Launch.items[name] = item_id
         return cls
 
     return decorator
 
+
 def story(name: str):
     def decorator(cls):
-        __tracebackhide__ = True
-        parent = cls.__mro__[1].__name__
+        parent = _get_class_parent(cls)
+        print(parent)
         item_id = Launch.create_report_item(
             name=name,
             parent_item=parent,
@@ -97,3 +114,18 @@ def story(name: str):
 
     return decorator
 
+
+def log(*, message: str, level: str = "INFO"):
+    item = Launch.get_caller_name()
+    Launch.create_log(item=item, message=message, level=level)
+
+
+def attachment(*, item: str, name: str, attachment: Union[str, bytes], attachment_type: str, level: Literal["ERROR", "INFO", "DEBUG"] = "ERROR"):
+    """Add attachment to the item (test class/case/step)
+    :param item: The item name (function name)
+    :param name: The attachment name
+    :param attachment: attachment as bytes or the path to the attachment
+    :param attachment_type: The type of the attachment (i.e use report.attachment_type.PNG)
+    :param level: The log level of the the attachment (i.e if an error occured and you want to attach a screenshot use "ERROR")
+    """
+    Launch.add_attachment(item=item, message=name, level=level, attachment=attachment, attachment_type=attachment_type)
