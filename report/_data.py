@@ -35,13 +35,14 @@ def parse():
     import os
 
     filename = 'report_properties.ini'
+    config = configparser.ConfigParser()
     for root, dirs, files in os.walk('.'):
         if filename in files:
             # The file was found
             filepath = os.path.join(root, filename)
+            config.read(filepath)
     # The root directory of the project is the parent directory of the directory containing 'requirements.txt'
-    config = configparser.ConfigParser()
-    config.read(filepath)
+
     endpoint = config.get('Data', 'endpoint')
     uuid = config.get('Data', 'uuid')
     launch_name = config.get('Data', 'launch_name')

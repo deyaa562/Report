@@ -2,6 +2,8 @@ import pytest
 from ._internal import Launch
 from ._data import parse
 
+
+parse()
 def pytest_addoption(parser):
     parser.addoption("--report", action="store_true")
 

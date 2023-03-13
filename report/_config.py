@@ -10,14 +10,14 @@ def config():
     args = parser.parse_args()
     print(args.bearer_uuid)
     _internal.Data.endpoint = args.host
-    _internal.Data.launch_name = args.launch_name 
+    _internal.Data.launch_name = args.launch_name
     _internal.Data.uuid = args.bearer_uuid
     _internal.Data.project = args.project_name
     _internal.Data.update_url()
-    _internal.Launch.update_headers()
+    _internal.Data.update_headers()
 
-    
+
 if __name__ == '__main__':
     data = config()
     _internal.Launch.start_launch()
-    
+
