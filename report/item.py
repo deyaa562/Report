@@ -113,8 +113,6 @@ def story(name: str):
         return cls
 
     return decorator
-<<<<<<< HEAD
-=======
 
 
 def log(*, message: str, level: str = "INFO"):
@@ -131,4 +129,3 @@ def attachment(*, item: str, name: str, attachment: Union[str, bytes], attachmen
     :param level: The log level of the the attachment (i.e if an error occured and you want to attach a screenshot use "ERROR")
     """
     Launch.add_attachment(item=item, message=name, level=level, attachment=attachment, attachment_type=attachment_type)
->>>>>>> cf701740f5b15c4d2088c2699a5c552e18d9a6d4
