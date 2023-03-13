@@ -20,6 +20,7 @@ def _run_func(func, *args, **kwargs):
 
     return func(*args, **kwargs)
 
+
 def step(title: str):
     def decorator(func):
         @functools.wraps(func)
@@ -49,6 +50,7 @@ def step(title: str):
         return wrapper
     return decorator
 
+
 def title(title: str):
     def decorator(func):
         @functools.wraps(func)
@@ -69,6 +71,7 @@ def title(title: str):
         return wrapper
     return decorator
 
+
 def feature(name: str):
     def decorator(cls):
         __tracebackhide__ = True
@@ -81,6 +84,7 @@ def feature(name: str):
         return cls
 
     return decorator
+
 
 def story(name: str):
     def decorator(cls):
@@ -96,4 +100,3 @@ def story(name: str):
         return cls
 
     return decorator
-
