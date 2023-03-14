@@ -25,8 +25,6 @@ def _run_func(func, *args, **kwargs):
 def _get_class_parent(child_class):
     for base_class in child_class.__bases__:
         base_class_name = base_class.__name__
-        print(base_class_name)
-        print(Launch.items.keys())
         if base_class_name in Launch.items.keys():
             return base_class_name
         elif len(base_class.__bases__) > 0 :
@@ -102,8 +100,6 @@ def feature(name: str):
 def story(name: str):
     def decorator(cls):
         parent = _get_class_parent(cls)
-        print(parent)
-        print(parent)
         item_id = Launch.create_report_item(
             name=name,
             parent_item=parent,
