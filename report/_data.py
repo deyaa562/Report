@@ -1,5 +1,11 @@
+import json
 from time import time
 
+
+LAUNCH_DATA_FILE = './launch_data.json'
+
+with open(LAUNCH_DATA_FILE, 'w') as file:
+    file.write(r'{"launchUuid": ""}')
 
 def timestamp():
     return str(int(time() * 1000))
@@ -30,18 +36,30 @@ class Data:
         cls.headers = {
             'Authorization': f'Bearer {cls.uuid}'}
 
+    @classmethod
+    def read_data_file(cls):
+        with open(LAUNCH_DATA_FILE, 'r') as file:
+            data = json.load(file)
+            cls.base_item_data['launchUuid'] = data['launchUuid']
+
+    @classmethod
+    def update_data_file(cls, new_uuid):
+        cls.read_data_file()
+        cls.base_item_data['launchUuid'] = new_uuid
+        with open(LAUNCH_DATA_FILE, 'w') as file:
+            json.dump(cls.base_item_data, file)
+            
 def parse():
     import configparser
     import os
 
     filename = 'report_properties.ini'
+    config = configparser.ConfigParser()
     for root, dirs, files in os.walk('.'):
         if filename in files:
-            # The file was found
             filepath = os.path.join(root, filename)
-    # The root directory of the project is the parent directory of the directory containing 'requirements.txt'
-    config = configparser.ConfigParser()
-    config.read(filepath)
+            config.read(filepath)
+
     endpoint = config.get('Data', 'endpoint')
     uuid = config.get('Data', 'uuid')
     launch_name = config.get('Data', 'launch_name')

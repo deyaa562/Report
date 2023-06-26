@@ -1,9 +1,24 @@
 import requests
+import json
+import os
 import inspect
+import json
 from ._data import timestamp, Data, parse
+import tempfile
+
+temp_dir = tempfile.gettempdir()
+FILE_PATH = os.path.join(temp_dir, 'test.json')
+with open(FILE_PATH, 'w') as file:
+    file.write(r'{"": ""}')
+
 
 class Launch:
-    items = {'': ''}
+    _instance = None
+
+    def __new__(cls, *args, **kwargs):
+        if not cls._instance:
+            cls._instance = super().__new__(cls)
+        return cls._instance
 
     @classmethod
     def get_enclosing_class_name(cls, func):
@@ -12,13 +27,38 @@ class Launch:
         Returns None if the function is not a method.
         '''
         if inspect.ismethod(func) or inspect.isfunction(func):
-            # Get the name of the first argument
             arg_names = inspect.getfullargspec(func).args
             if arg_names and arg_names[0] == 'self':
-                # The first argument is 'cls', so this is a method
                 return func.__qualname__.split('.')[0]
         return None
 
+    @classmethod
+    def items(cls) -> dict:
+        with open(FILE_PATH, 'r') as file:
+            return json.load(file)
+
+    @classmethod
+    def __update_items_file(cls, new_items: dict):
+        with open(FILE_PATH, 'w') as file:
+            json.dump(new_items, file)
+    
+    @classmethod
+    def add_item(cls, item_name, item_id):
+        current_items = cls.items()
+        current_items[item_name] = item_id
+        Launch.__update_items_file(current_items)
+    
+    @classmethod
+    def get_latest_item(cls):
+        current_items = cls.items()
+        last_key, _ = list(current_items.items())[-1]
+        return last_key
+
+    @classmethod
+    def delete_item(cls, item_name):
+        current_items = cls.items()
+        current_items.pop(item_name, None)
+        Launch.__update_items_file(current_items)
 
     @classmethod
     def get_caller_name(cls):
@@ -31,17 +71,14 @@ class Launch:
 
         data = {
             'name': Data.launch_name,
-            'description': 'My first launch on RP',
             f'startTime': timestamp()}
 
+        Data.read_data_file()
         if Data.base_item_data['launchUuid'] == '':
             respone = requests.post(url=f'{Data.endpoint}/launch', headers=Data.headers, json=data)
-            print(respone.json())
             launch_uuid = respone.json()['id']
-            Data.base_item_data['launchUuid'] = launch_uuid
+            Data.update_data_file(launch_uuid)
 
-        else:
-            print('Second attemp to start a launch')
 
     @classmethod
     def finish_launch(cls):
@@ -58,8 +95,11 @@ class Launch:
             has_stats: bool = True):
 
         parse()
-        
-        parent = cls.items[parent_item]
+        current_items = cls.items()
+        parent = current_items[parent_item]
+        if Data.base_item_data['launchUuid'] == '':
+            Data.read_data_file()
+
         data = Data.base_item_data
         data['name'] = name
         data['type'] = type
@@ -72,112 +112,90 @@ class Launch:
         return response_json['id']
 
     @classmethod
-    def finish_item(cls, item_name: str):
-        item = cls.items[item_name]
-        json_data= {
+    def finish_item(cls, item_name: str, passed: bool = True):
+        status = 'passed' if passed else 'failed'
+        current_items = cls.items()
+        try:
+            item = current_items[item_name]
+            json_data= {
             'launchUuid': Data.base_item_data['launchUuid'],
-            'endTime': timestamp()}
-        
-        requests.put(url=f'{Data.endpoint}/item/{item}', headers=Data.headers, json=json_data)
+            'endTime': timestamp(),
+            'status': status}
+            data = Data.headers
+            data['Content-Type']='application/json'
+            response = requests.put(url=f'{Data.endpoint}/item/{item}', headers=data, json=json_data)
+            cls.delete_item(item_name)
+        except:
+            pass
+
 
     @classmethod
     def finish_passed_item(cls, item_name: str):
-        item = cls.items[item_name]
+        current_items = cls.items()
+        item = current_items[item_name]
         json_data= {
             'launchUuid': Data.base_item_data['launchUuid'],
             'endTime': timestamp(),
-            'status': 'passed'
-        }
-        requests.put(url=f'{Data.endpoint}/item/{item}', headers=Data.headers, json=json_data)
+            'status': 'passed'}
+
+        response = requests.put(url=f'{Data.endpoint}/item/{item}', headers=Data.headers, json=json_data)
+        cls.delete_item(item_name)
 
     @classmethod
-    def finish_failed_item(cls, item_name: str, reason):
-        item = cls.items[item_name]
+    def finish_failed_item(cls, item_name: str, message: str, reason: str):
+        current_items = cls.items()
+        item = current_items[item_name]
         json_data = {
             'launchUuid': Data.base_item_data['launchUuid'],
             'endTime': timestamp(),
             'status': 'failed',
-            'issue': {'comment': reason}
-            }
+            'issue': {
+                'issueType': 'pb001',
+                'comment': message},
+            'description': reason}
 
-        requests.put(url=f'{Data.endpoint}/item/{item}', headers=Data.headers, json=json_data)
+        response = requests.put(url=f'{Data.endpoint}/item/{item}', headers=Data.headers, json=json_data)
+        cls.delete_item(item_name)
 
     @classmethod
     def create_log(cls, item: str, message: str, level: str = "INFO"):
+        current_items = cls.items()
         json_data = {
             "launchUuid": Data.base_item_data['launchUuid'],
-            "itemUuid": cls.items[item],
+            "itemUuid": current_items[item],
             "time": timestamp(),
             "message": message,
             "level": level,
         }
 
-        response = requests.post(url=f'{Data.endpoint}/log', headers=Data.headers, json=json_data)
+        requests.post(url=f'{Data.endpoint}/log', headers=Data.headers, json=json_data)
 
-    # @classmethod
-    # def add_attachment(cls, name: str, item: str, file_path: str):
-    #     import os
-    #     file_name = os.path.basename(file_path)
-    #     body = {
-    #         "launchUuid": Data.base_item_data['launchUuid'],
-    #         "itemUuid": cls.items[item],
-    #         "time": timestamp(),
-    #         "message": cls.items[item],
-    #         "level": 40000,
-    #         "file":{
-    #           "name": file_name
-    #         },
-    #     }
+    @classmethod
+    def add_attachment(cls, message: str, level: str, attachment: str, attachment_type: str, item: str = ''):
+        file_name = os.path.basename(attachment)
+        current_items = cls.items()
+        item_uuid = current_items[item] if len(item) > 0 else cls.get_latest_item()
+        json_body = {
+            "launchUuid": Data.base_item_data['launchUuid'],
+            "time": timestamp(),
+            "message": message,
+            "level": level,
+            "itemUuid": item_uuid,
+            "file": {"name": file_name}}
 
-    #     json_file_path = '/tmp/json_file.json'
-    #     with open(json_file_path, 'w') as file:
-    #         file.write(json.dumps([body]))
-
-    #     payload = {"json_request_part": f'{json.dumps([body])};type=application/json'}
-    #     print(payload)
-    #     files = {'file': (file_name ,open(file_path,'rb'), 'image/png')}
-
-    #     data = f"json_request_part='{json.dumps([body])};type=application/json'"
-
-    #     files = {
-    #         ('file', open(file_path, 'rb'), 'image/png'),
-    #         ('json_request_part', open(json_file_path, 'r'), 'application/json')
-    #     }
-
-    #     response = requests.post(url=f'{Data.endpoint}/log', headers=Data.headers, data=files)
-    #     print(response.json())
-
-    # def add_attachment(cls, item: str, file_path: str):
-    #     json_data = {
-    #         "launchUuid": Data.base_item_data['launchUuid'],
-    #         "itemUuid": cls.items[item],
-    #         "time": timestamp(),
-    #         "message": cls.items[item],
-    #         "level": 40000,
-    #     }
-
-    #     with open(file_path, 'r') as f:
-    #         file_data = f.read()
-
-    #     # Construct the multipart/form-data request
-    #     data = (
-    #         '--' + '---------------------------1234567890' + '\r\n' +
-    #         'Content-Disposition: form-data; name="json_request_part"' + '\r\n' +
-    #         'Content-Type: application/json' + '\r\n\r\n' +
-    #         json.dumps(json_data) + '\r\n' +
-    #         '--' + '---------------------------1234567890' + '\r\n' +
-    #         'Content-Disposition: form-data; name="file"; filename="' + file_path + '"' + '\r\n' +
-    #         'Content-Type: text/plain' + '\r\n\r\n' +
-    #         file_data + '\r\n' +
-    #         '--' + '---------------------------1234567890--'
-    #     )
-
-    #     # Send the API request
-    #     headers = Data.headers
-    #     headers['Content-Type'] = 'multipart/form-data; boundary=---------------------------1234567890'
-    #     response = requests.post(url=f'{Data.endpoint}/log', headers=headers, data=data)
-
-    #     print(response.status_code)
-    #     print(response.text)
-
-
+        data = b''
+        data += b'--boundary-string\r\n'
+        data += f'Content-Disposition: form-data; name="json_request_part"\r\n'.encode('utf-8')
+        data += b'Content-Type: application/json\r\n\r\n'
+        data += json.dumps([json_body]).encode('utf-8')
+        data += b'\r\n--boundary-string\r\n'
+        data += f'Content-Disposition: form-data; name="{file_name}"; filename="Screenshot.png"\r\n'.encode('utf-8')
+        data += f'Content-Type: {attachment_type}\r\n\r\n'.encode('utf-8')
+        with open(attachment, 'rb') as f:
+            image_data = f.read()
+        data += image_data
+        data += b'\r\n--boundary-string--\r\n'
+        headers = Data.headers
+        headers['Content-Type'] = 'multipart/form-data; boundary=boundary-string'
+        response = requests.post(url=f'{Data.endpoint}/log', headers=headers, data=data)
+        return response
