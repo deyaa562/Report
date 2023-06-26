@@ -1,123 +1,178 @@
 from ._internal import Launch
-import inspect
 import functools
-import asyncio
-from typing import Union, Literal
+from typing import Any, Union, Literal
+from .core import *
+import traceback
 
 
-def _run_func(func, *args, **kwargs):
-    __tracebackhide__ = True
-    if inspect.iscoroutinefunction(func):
-        try:
-            loop = asyncio.get_running_loop()
-        except RuntimeError as e:
-            if "no running event loop" in str(e):
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-            else:
-                raise e
+class step:
+    def __init__(self, name: str = None):
+        self.name = name if name else None
 
-            return loop.run_until_complete(func(*args, **kwargs))
-
-    return func(*args, **kwargs)
-
-
-def _get_class_parent(child_class):
-    for base_class in child_class.__bases__:
-        base_class_name = base_class.__name__
-        if base_class_name in Launch.items.keys():
-            return base_class_name
-        elif len(base_class.__bases__) > 0 :
-            return _get_class_parent(base_class)
-
-
-def step(title: str):
-    def decorator(func):
+    def __call__(self, func):
+        __tracebackhide__ = True
+        func.__new_name__ = self.name if self.name else func.__name__
         @functools.wraps(func)
         def wrapper(*args, **kwargs):
             __tracebackhide__ = True
-            parent = Launch.get_caller_name()
-            name = title.format(*args, **kwargs)
-            item_id = Launch.create_report_item(
-                name=name,
+            func_is_fixture = _is_fixture(func, args, kwargs)
+            if not func_is_fixture:
+                caller = Launch.get_caller_name()
+                if 'test_' in caller or '_test' in caller:
+                    parent = f'{caller}_Execution'
+                else:
+                    parent = caller
+
+                item_id = Launch.create_report_item(
+                    name=self.name,
+                    parent_item=parent,
+                    type='step',
+                    has_stats=False,
+                    description=func.__doc__)
+    
+                Launch.add_item(func.__name__, item_id)
+
+            passed = True
+            try:
+                result = _run_func(func, *args, **kwargs)
+            except:
+                passed = False
+            
+            if not func_is_fixture:
+                Launch.finish_item(func.__name__, passed)
+
+            return result
+
+        return wrapper
+
+    def __enter__(self):
+        __tracebackhide__ = True
+        parent = Launch.get_latest_item()
+        item_id = Launch.create_report_item(
+                name=self.name,
                 parent_item=parent,
                 type='step',
                 has_stats=False,
-                description=func.__doc__)
+                description='')
 
-            Launch.items[func.__name__] = item_id
-            result = None
-            try:
-                result = _run_func(func, *args, **kwargs)
+        Launch.add_item(self.name, item_id)
 
-            except Exception as exception:
-                Launch.finish_failed_item(func.__name__, str(exception))
-                raise exception
+    def __exit__(self, exc_type, exc_value, tb):
+        __tracebackhide__ = True
 
-            Launch.finish_passed_item(func.__name__)
-            return result
+        passed = exc_type is None
+        if passed:
+            Launch.finish_item(self.name, passed)
 
-        return wrapper
-    return decorator
+        elif not passed:
+            traceback_str = ''.join(traceback.format_tb(tb))
+            message = f'{exc_type.__name__}: {exc_value}'
+            Launch.finish_failed_item(self.name, message=message, reason=traceback_str)
 
 
-def title(title: str):
-    def decorator(func):
+class title:
+    def __init__(self, name: str):
+        self.name = name
+        
+    def __call__(self, func):
+        __tracebackhide__ = True
+        func.__new_name__ = self.name
+        self.__name__ = func.__name__
+        self.__qualname__ = func.__qualname__
+
         @functools.wraps(func)
         def wrapper(*args, **kwargs):
             __tracebackhide__ = True
-            name = title.format(*args, **kwargs)
-            item_id = Launch.create_report_item(
-                name=name,
-                parent_item=Launch.get_enclosing_class_name(func),
-                type='test',
-                description=func.__doc__)
-
-            Launch.items[func.__name__] = item_id
-            result = _run_func(func, *args, **kwargs)
-            Launch.finish_item(func.__name__)
+            func.formatted_name = self.name.format(*args, **kwargs)
+            result = func(*args, **kwargs)
             return result
 
         return wrapper
-    return decorator
+    
+    def __enter__(self):
+        __tracebackhide__ = True
+        parent = Launch.get_caller_name()
+        item_id = Launch.create_report_item(
+                name=self.name,
+                parent_item=parent,
+                type='step',
+                has_stats=False,
+                description='')
 
+        Launch.add_item(self.name, item_id)
+
+    def __exit__(self, exc_type, exc_value, tb):
+        __tracebackhide__ = True
+        passed = exc_type is None
+        if passed:
+            Launch.finish_item(self.name, passed)
+
+        elif not passed:
+            traceback_str = ''.join(traceback.format_tb(tb))
+            message = f'{exc_type.__name__}: {exc_value}'
+            Launch.finish_failed_item(self.name, message=message, reason=traceback_str)
 
 def feature(name: str):
-    def decorator(cls):
+    def actual_decorator(cls):
         __tracebackhide__ = True
+
+        original_setup = getattr(cls, 'setup_class', None)
+        original_teardown = getattr(cls, 'teardown_class', None)
         item_id = Launch.create_report_item(
             name=name,
             type='suite',
             description=cls.__doc__)
 
-        Launch.items[cls.__name__] = item_id
-        Launch.items[name] = item_id
+        Launch.add_item(cls.__name__, item_id)
+        Launch.add_item(name, item_id)
+
+        @classmethod
+        def new_teardown_class(cls, *args, **kwargs):
+            if original_teardown is not None:
+                original_teardown(*args, **kwargs)
+
+            Launch.finish_item(cls.__name__)
+
+        cls.teardown_class = new_teardown_class
         return cls
 
-    return decorator
+    return actual_decorator
+
 
 
 def story(name: str):
-    def decorator(cls):
+    def actual_decorator(cls):
+        original_setup = getattr(cls, 'setup_class', None)
+        original_teardown = getattr(cls, 'teardown_class', None)
         parent = _get_class_parent(cls)
         item_id = Launch.create_report_item(
-            name=name,
-            parent_item=parent,
-            type='story',
-            description=cls.__doc__)
+                name=name,
+                parent_item=parent,
+                type='story',
+                description=cls.__doc__)
 
-        Launch.items[cls.__name__] = item_id
+        Launch.add_item(cls.__name__, item_id)
+
+        @classmethod
+        def new_teardown_class(cls, *args, **kwargs):
+            if original_teardown is not None:
+                original_teardown(*args, **kwargs)
+
+            Launch.finish_item(cls.__name__)
+
+        cls.teardown_class = new_teardown_class
+
         return cls
 
-    return decorator
+    return actual_decorator
 
 
 def log(*, message: str, level: str = "INFO"):
+    __tracebackhide__ = True
     item = Launch.get_caller_name()
     Launch.create_log(item=item, message=message, level=level)
 
-
-def attachment(*, item: str, name: str, attachment: Union[str, bytes], attachment_type: str, level: Literal["ERROR", "INFO", "DEBUG"] = "ERROR"):
+def attachment(*, name: str, attachment: Union[str, bytes], item: str = '', attachment_type: str, level: Literal["ERROR", "INFO", "DEBUG"] = "ERROR"):
     """Add attachment to the item (test class/case/step)
     :param item: The item name (function name)
     :param name: The attachment name
